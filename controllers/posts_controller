@@ -73,7 +73,7 @@ const show = (req, res)=>{
                                             FROM tags T
                                             JOIN post_tag PT
                                             ON T.id = PT.tag_id
-                                            WHERE PT.post_id = ? `;  //alisa tabelle: T=tags, PT=post_tag
+                                            WHERE PT.post_id = ? `;  //alias tabelle: T=tags, PT=post_tag
                             
 
                             connection.query(   tags_sql, [id], (err, tagsResults) => { 
@@ -104,34 +104,23 @@ const store = (req, res) => {
 
     console.log(req.body);  
     
-    const { id, ...data } = req.body; // scarta eventuale id dal client
+    const { title, content, image, tags } = req.body; 
 
-    const maxId = posts.length  ? Math.max(...posts.map(p => p.id)) //recupero l'id piu alto nell'array di oggetti con Math.max
-                                : 0;                                //se non ci sono post, l'id base è 0
-    console.log("Id piu grande: "+maxId)
+    const parameters = [title, content, image, tags];
 
-    const newPost = {
-        id: maxId + 1,
-        ...data
-    };
-
-    /* VERSIONE ESTESA
-    const { title, content, image, tags } = req.body;               //destructuring del json
+    const newPost_sql = `INSERT INTO posts (title, content, image) 
+                         VALUES (?, ?, ?) `; 
     
-	 const newPost = {           //creo un nuovo oggetto post da inserire nell'array
-        id: maxId+1,            //aggiungo +1 all'id più grande dell'array (id univoco per ogni oggetto)
-        title,                  //dichiaro le chiavi-valori 
-        content,
-        image,
-        tags
-    }; */
+    connection.query(newPost_sql,parameters,(err, newPostResults)=>{
+        if (err) return res.status(500).json({
+                                error:"Internal System Error",
+                                message:"Errore interno del server"
+                            })
+        console.log(newPostResults);
+        return res.status(201).json(newPostResults.insertId);   //201 status di nuovo oggetto creato con successo
+    })
 
-    console.log(newPost);
-
-    posts.push(newPost);                //inserisco l'oggetto nel'array
-    console.log(posts.length);          //dovrebbe restituire un oggetto in più
-
-    res.status(201).json(newPost);      //201 status di nuovo oggetto creato con successo e lo restituisco
+     
 }
 
 const update = (req, res) => { 
