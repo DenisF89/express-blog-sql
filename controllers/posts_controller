@@ -100,27 +100,67 @@ const show = (req, res)=>{
 
 
 
-const store = (req, res) => {
-
-    console.log(req.body);  
+const store = (req, res) => { 
     
     const { title, content, image, tags } = req.body; 
 
-    const parameters = [title, content, image, tags];
-
-    const newPost_sql = `INSERT INTO posts (title, content, image) 
-                         VALUES (?, ?, ?) `; 
-    
-    connection.query(newPost_sql,parameters,(err, newPostResults)=>{
-        if (err) return res.status(500).json({
+    //Inserisco nuovo post in table posts
+    connection.query(   `INSERT INTO posts (title, content, image)      
+                         VALUES (?, ?, ?) `,                            //evita sql-injection
+                        [title, content, image],                        //parametri da salvare
+                        (err, newPostResults)=>{                        //funzione di callback asincrona
+                            if (err) return res.status(500).json({
                                 error:"Internal System Error",
-                                message:"Errore interno del server"
+                                message:"Errore nel salvataggio del nuovo post"
                             })
-        console.log(newPostResults);
-        return res.status(201).json(newPostResults.insertId);   //201 status di nuovo oggetto creato con successo
-    })
+                        const postId = newPostResults.insertId;         //recupero l'id del nuovo record con insertId
+                        console.log(`Inserito nuovo post con id ${postId}`, newPostResults);
+                    
+    //Inserisco tags in table tags se nuovi
 
-     
+        const tagValues = tags.map(tag => [tag]);   //trasformo i parametri in array di array per SQL per inserimento righe multiple (per ogni tag)
+
+        connection.query(`INSERT IGNORE INTO tags (label)
+                          VALUES ?`,                //il comando IGNORE serve in caso il tag esistesse già lo ignora (il campo nella tabella deve essere UNIQUE)
+                        [tagValues], 
+                        (err,tagResults) => {
+                            if (err) return res.status(500).json({
+                                error:"Internal System Error",
+                                message:"Errore inserimento tag"
+                            })
+                        console.log(`Inseriti ${tagResults.affectedRows} nuovi tag`, tagResults);
+
+    //Recupero id dei tag
+                            connection.query(`SELECT id
+                                              FROM tags
+                                              WHERE label IN (?)`, 
+                                              [tags], 
+                                              (err, tagIdResults) => {
+                                if (err) return res.status(500).json({
+                                    error: "Internal Server Error",
+                                    message: "Errore nel recupero degli id dei tag"
+                                });
+
+    //Inserisco relazioni in post_tag
+
+                                const postTagValues = tagIdResults.map(tag => [postId, tag.id]); //per ogni tag recuperato salvo un array con id del post e id del tag
+
+                                connection.query(`INSERT INTO post_tag (post_id, tag_id)
+                                        VALUES ?`, [postTagValues], 
+                                      (err) => {
+                                        if (err) return res.status(500).json({
+                                        error: "Internal Server Error",
+                                        message: "Errore nell'associazione tag-post"
+                                        });        
+                                });
+                            });
+                        });
+
+                        return res.status(201).json({                   //201 status di nuovo oggetto creato con successo
+                                message: "Post creato con successo",
+                                id: postId
+                        }) 
+    });
 }
 
 const update = (req, res) => { 
