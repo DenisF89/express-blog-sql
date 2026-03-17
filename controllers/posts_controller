@@ -42,18 +42,18 @@ const show = (req, res)=>{
 
     console.log("Recupero il post");
              
-    const sql = `SELECT * FROM posts 
-                 WHERE id = ? `          //"?" evita sql injections
+    const post_sql = `SELECT * FROM posts 
+                      WHERE id = ? `;          //"?" evita sql injections
 
-    connection.query(   sql,      
-                        [id],
-                        (err,result) => { 
+    connection.query(   post_sql, [id], (err, postResults) => { 
+                            //intercetto errore 
                             if (err) return res.status(500).json({
                                 error:"Internal System Error",
                                 message:"Errore interno del server"
                             })
 
-                            if (result.length === 0) {
+                            //se la query non ha dato risultati
+                            if (postResults.length === 0) {
 
                                 console.log(err,"Il post "+id+" non esiste")
                                 return res.status(404).json(
@@ -64,10 +64,38 @@ const show = (req, res)=>{
                                     );
                                 }
 
-                            console.log("Post recuperato")
-	                        return res.json(result); 
-                        }
-                    );
+                            const post = postResults[0];
+                            console.log("Post recuperato: " +post);
+
+                            console.log("recupero i tag");
+
+                            const tags_sql = `SELECT T.label           
+                                            FROM tags T
+                                            JOIN post_tag PT
+                                            ON T.id = PT.tag_id
+                                            WHERE PT.post_id = ? `;  //alisa tabelle: T=tags, PT=post_tag
+                            
+
+                            connection.query(   tags_sql, [id], (err, tagsResults) => { 
+
+                                //intercetto errore 
+                                if (err) return res.status(500).json({
+                                    error:"Internal System Error",
+                                    message:"Errore interno del server"
+                                })
+
+                                //se la query non ha dato risultati
+                                if (tagsResults.length === 0) {
+
+                                    console.log(err,"Il post "+id+" non ha tags")    
+                                }
+                                
+                                post.tags = tagsResults.map(tag=>tag.label);
+
+                                return res.json(post); 
+                            });
+
+                        });
 }
 
 
