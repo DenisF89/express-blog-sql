@@ -1,0 +1,155 @@
+const posts = require('../data/post_data.js');	
+const connection = require('../data/db'); 
+
+const index = (req,res)=>{
+
+    //CON UN TAG PRECISO: ?tag=dolci (case-insensitive)
+    /* const tag = req.query.tag;
+    if (!tag) return res.json(posts);
+    const filteredposts = posts.filter(post=>post.tags.some(t=>t.toLowerCase()===tag.toLowerCase()));
+    res.json(filteredposts); */
+
+    //CON UNO O PIU TAG:  ?tag=dolci&tag=ricette
+    const { tag } = req.query;              //express unisce piu valori con stessa chiave in array
+
+    if (!tag) {
+        const sql = 'SELECT * FROM posts';          // preparazione query
+        connection.query(sql, (err, results) => {   // esecuzione query
+            if (err) return res.status(500).json({ error: 'Database query failed' }); 
+            return res.json(results); });
+    }
+    else{
+    
+    const alltags = (Array.isArray(tag)     //trasformo sempre in un array
+                    ? tag
+                    : [tag]) 
+    .map(t => t.toLowerCase().trim());      //normalizzo querystring
+
+    const results = posts.filter(p =>                       //restituisci solo i post dove
+                    alltags.every(onetag =>                 //ogni tag nell'array di querystring
+                    p.tags.some(t =>                        //(se c'è almeno una corrispondenza)
+                    t.toLowerCase().includes(onetag))));    //è incluso(uguaglianza parziale) in una delle stringhe(tutto minuscolo) dell'array della proprità tags
+
+    res.json(results);
+        
+    }
+}
+
+const show = (req, res)=>{
+
+    //RECUPERO IL POST SE ESISTE
+    const id = Number(req.params.id);   // recupero id dall'URL (params)
+
+    console.log("Recupero il post");
+             
+    const sql = `SELECT * FROM posts 
+                 WHERE id = ? `          //"?" evita sql injections
+
+    connection.query(   sql,      
+                        [id],
+                        (err,result) => { 
+                            if (err) return res.status(500).json({
+                                error:"Internal System Error",
+                                message:"Errore interno del server"
+                            })
+
+                            if (result.length === 0) {
+
+                                console.log(err,"Il post "+id+" non esiste")
+                                return res.status(404).json(
+                                        {
+                                            error:"Not Found",
+                                            message:`Il post ${id} non esiste`
+                                        }
+                                    );
+                                }
+
+                            console.log("Post recuperato")
+	                        return res.json(result); 
+                        }
+                    );
+}
+
+
+
+const store = (req, res) => {
+
+    console.log(req.body);  
+    
+    const { id, ...data } = req.body; // scarta eventuale id dal client
+
+    const maxId = posts.length  ? Math.max(...posts.map(p => p.id)) //recupero l'id piu alto nell'array di oggetti con Math.max
+                                : 0;                                //se non ci sono post, l'id base è 0
+    console.log("Id piu grande: "+maxId)
+
+    const newPost = {
+        id: maxId + 1,
+        ...data
+    };
+
+    /* VERSIONE ESTESA
+    const { title, content, image, tags } = req.body;               //destructuring del json
+    
+	 const newPost = {           //creo un nuovo oggetto post da inserire nell'array
+        id: maxId+1,            //aggiungo +1 all'id più grande dell'array (id univoco per ogni oggetto)
+        title,                  //dichiaro le chiavi-valori 
+        content,
+        image,
+        tags
+    }; */
+
+    console.log(newPost);
+
+    posts.push(newPost);                //inserisco l'oggetto nel'array
+    console.log(posts.length);          //dovrebbe restituire un oggetto in più
+
+    res.status(201).json(newPost);      //201 status di nuovo oggetto creato con successo e lo restituisco
+}
+
+const update = (req, res) => { 
+
+    const post = req.post;                  //recupero il post da middleware checkId
+
+    for (const key in post){                //per ogni proprietà in post
+        if (key !== "id")                   //se diversa da id (id rimane invariato)
+        {post[key] = req.body[key]}         //sovrascrivi con i nuovi valori
+    }
+
+    console.log(post);                      
+    res.status(200).json(post);             //restituisco il post aggiornato
+}
+
+const modify = (req, res) => {
+ 
+	const post = req.post
+    
+    const allowedProperties = Object.keys(posts[0]).filter(key=>key !=="id");  //proprietà modificabili              
+
+    for (const propertyName of allowedProperties){                  //per ogni elemento dell'array
+        if(req.body[propertyName] !== undefined){                   //se è stata passata dal body request
+            post[propertyName] = req.body[propertyName]             //registrala su post
+        }
+    } 
+    
+    console.log(post);
+
+    res.status(200).json(post);                                     //restituisco il post aggiornato 
+}
+
+const destroy = (req, res) => {
+
+    //RECUPERO IL POST SE ESISTE
+    const id = Number(req.params.id);   // recupero id dall'URL (params)
+
+    console.log("Recupero il post");
+
+    const sql = `DELETE FROM posts 
+                 WHERE id = ?`
+
+    connection.query(   sql,[id],(err) => { 
+                            if (err) return res.status(500).json({ error: 'Errore nella cancellazione post' }); 
+                            res.sendStatus(204)
+                        });
+}
+
+module.exports = {index, show, store, update, modify, destroy};

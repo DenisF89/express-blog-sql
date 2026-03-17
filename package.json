@@ -1,0 +1,17 @@
+{
+  "name": "express-blog-intro",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "Denis",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node api.js",
+    "dev": "node --watch api.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "mysql2": "^3.19.1"
+  }
+}
