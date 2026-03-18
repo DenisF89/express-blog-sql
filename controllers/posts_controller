@@ -98,8 +98,6 @@ const show = (req, res)=>{
                         });
 }
 
-
-
 const store = (req, res) => { 
     
     const { title, content, image, tags } = req.body; 
@@ -141,6 +139,8 @@ const store = (req, res) => {
                                     message: "Errore nel recupero degli id dei tag"
                                 });
 
+                                console.log(tagIdResults);
+
     //Inserisco relazioni in post_tag
 
                                 const postTagValues = tagIdResults.map(tag => [postId, tag.id]); //per ogni tag recuperato salvo un array con id del post e id del tag
@@ -165,15 +165,50 @@ const store = (req, res) => {
 
 const update = (req, res) => { 
 
-    const post = req.post;                  //recupero il post da middleware checkId
+    //RECUPERO IL POST SE ESISTE
+    const id = Number(req.params.id);   // recupero id dall'URL (params)
+    const {title,content,image,tags} = req.body;
 
-    for (const key in post){                //per ogni proprietà in post
-        if (key !== "id")                   //se diversa da id (id rimane invariato)
-        {post[key] = req.body[key]}         //sovrascrivi con i nuovi valori
-    }
+    //AGGIORNO IL POST 
+    //con id nel parametro e attributi nel body 
+    connection.query( `UPDATE posts 
+                       SET title = ?, content = ?, image = ? 
+                       WHERE id = ?`, 
+                       [title, content, image, id], 
+                       (err, updatedPost) => { 
+                            if (err ) return res.status(500).json({ error: "Errore nell'aggiornamento del post" }); 
+                            if (updatedPost.affectedRows === 0) return res.status(404).json({ error: `Nessun post con id ${id} da aggiornare` }); 
+                            if (updatedPost.changedRows === 0) return res.status(200).json({ message: `Nessun cambiamento nei dati del post ${id}`});
+                            
+    //AGGIORNO I TAG
+    //Inserisco tags in table tags se nuovi
 
-    console.log(post);                      
-    res.status(200).json(post);             //restituisco il post aggiornato
+                        const tagValues = tags.map(tag => [tag]);                       //trasformo i parametri in array di array per SQL per inserimento righe multiple (per ogni tag)
+                        connection.query(`INSERT IGNORE INTO tags (label) VALUES ?`,    //il comando IGNORE serve in caso il tag esistesse già lo ignora (il campo nella tabella deve essere UNIQUE)
+                        [tagValues],(err,tagResults) => {
+                            if (err) return res.status(500).json({error:"Internal System Error",message:"Errore inserimento tag"});
+                            console.log(`Inseriti ${tagResults.affectedRows} nuovi tag`, tagResults);
+    
+    //Recupero id dei tag dal nome
+
+                            connection.query(`SELECT id FROM tags WHERE label IN (?)`,[tags],(err, tagIdResults) => {
+                                if (err) return res.status(500).json({error: "Internal Server Error",message: "Errore nel recupero degli id dei tag"});
+                                console.log(tagIdResults);
+
+                                const postTagValues = tagIdResults.map(tag => [id, tag.id]); //per ogni tag recuperato salvo un array con id del post e id del tag
+    
+    //Cancello relazioni legate al post
+                                connection.query(`DELETE FROM post_tag WHERE post_id = ?`, [id], (err) => {
+                                    if (err) return res.status(500).json({ error: 'Errore nella cancellazione relazioni' }); 
+    //Creo le nuove relazioni
+                                    connection.query(`INSERT INTO post_tag (post_id, tag_id) VALUES ?`, [postTagValues], (err) => {
+                                        if (err) return res.status(500).json({error: "Internal Server Error", message: "Errore nell'associazione tag-post"});     
+                                        res.status(200).json({ message: `Il post con id ${id} è stato aggiornato`});
+                                    });
+                                });
+                            });
+                        });
+    });
 }
 
 const modify = (req, res) => {

@@ -7,7 +7,7 @@ const checkPost = require('../middlewares/checkPost');
 
 const router = express.Router();
 
-router.use('/:id', checkId, checkPost);    // MIDDLEWARE sul router posts valido su tutti i path con parametro id
+router.use('/:id', checkId/* , checkPost */);    // MIDDLEWARE sul router posts valido su tutti i path con parametro id
 
 //Index (cRud)
 router.get('/', postsController.index );
