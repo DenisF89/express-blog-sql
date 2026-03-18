@@ -212,20 +212,29 @@ const update = (req, res) => {
 }
 
 const modify = (req, res) => {
- 
-	const post = req.post
     
-    const allowedProperties = Object.keys(posts[0]).filter(key=>key !=="id");  //proprietà modificabili              
+    const id = Number(req.params.id);   // recupero id del post dall'URL (params)
 
-    for (const propertyName of allowedProperties){                  //per ogni elemento dell'array
-        if(req.body[propertyName] !== undefined){                   //se è stata passata dal body request
-            post[propertyName] = req.body[propertyName]             //registrala su post
+    const allowedProperties = ["title","content","image"];   //campi della tabella posts aggiornabili
+    const data = {};                                         //preparo un oggetto chiave-valore per costruire il SET nella query (colonna-valore)
+    for (const propertyName of allowedProperties){           //per ogni proprietà consentita
+        if(req.body[propertyName] !== undefined){            //se è presente nel body request
+            data[propertyName] = req.body[propertyName]      //la aggiungo all'oggetto data
         }
     } 
-    
-    console.log(post);
 
-    res.status(200).json(post);                                     //restituisco il post aggiornato 
+    //AGGIORNO IL POST  
+    connection.query( `UPDATE posts 
+                       SET ? 
+                       WHERE id = ?`,       //prepared statement con SET ?.  Si aspetta un oggetto 
+                       [data, id],          //data -> title = 'valore', content = 'valore', image = 'valore'
+                       (err, updatedPost) => { 
+                            if (err ) return res.status(500).json({ error: "Errore nell'aggiornamento del post" }); 
+                            if (updatedPost.affectedRows === 0) return res.status(404).json({ error: `Nessun post con id ${id} da aggiornare` }); 
+                            if (updatedPost.changedRows === 0) return res.status(200).json({ message: `Nessun cambiamento nei dati del post ${id}`});
+                            console.log(updatedPost);
+                            res.status(200).json({ message: `Il post con id ${id} è stato aggiornato`, updated: data});
+                       });
 }
 
 const destroy = (req, res) => {
