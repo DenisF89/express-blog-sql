@@ -3,20 +3,14 @@ const connection = require('../data/db');
 
 const index = (req,res)=>{
 
-    //CON UN TAG PRECISO: ?tag=dolci (case-insensitive)
-    /* const tag = req.query.tag;
-    if (!tag) return res.json(posts);
-    const filteredposts = posts.filter(post=>post.tags.some(t=>t.toLowerCase()===tag.toLowerCase()));
-    res.json(filteredposts); */
+    //RECUPERO I TAG PASSATI NELLA QUERYSTRING
+    const { tag } = req.query;                      //express unisce piu valori con stessa chiave in array
 
-    //CON UNO O PIU TAG:  ?tag=dolci&tag=ricette
-    const { tag } = req.query;              //express unisce piu valori con stessa chiave in array
-
-    if (!tag) {
-        const sql = 'SELECT * FROM posts';          // preparazione query
+    if (!tag) {                                     //se non ci sono tag selezionati
+        const sql = `SELECT * FROM posts`;          // preparazione query
         connection.query(sql, (err, results) => {   // esecuzione query
-            if (err) return res.status(500).json({ error: 'Database query failed' }); 
-            return res.json(results); });
+            if (err) return res.status(500).json({ error: 'Database query failed' }); //se c'è un errore restituisce messaggio
+            return res.json(results); });           // restituisco i risultati della query (tutti i post) in formato json
     }
     else{
     
@@ -25,12 +19,28 @@ const index = (req,res)=>{
                     : [tag]) 
     .map(t => t.toLowerCase().trim());      //normalizzo querystring
 
-    const results = posts.filter(p =>                       //restituisci solo i post dove
+    const search = `%${alltags[0].toLowerCase()}%`; //cerca con un tag (il primo) e "substring" %search% (tipo include)
+
+    const sql = `SELECT DISTINCT P.id, P.title, P.content, P.image
+                FROM posts P
+                JOIN post_tag PT
+                ON P.id = PT.post_id
+                JOIN tags T
+                ON T.id = PT.tag_id
+                WHERE T.label LIKE ?`;          //seleziono solo i post che hanno il tag selezionato (Join su tabella ponte)
+
+    connection.query(sql, [search], (err, results) => {   // esecuzione query
+            if (err) return res.status(500).json({ error: 'Database query failed', err }); 
+            return res.json(results); 
+        });
+
+
+  /*   const results = posts.filter(p =>                       //restituisci solo i post dove
                     alltags.every(onetag =>                 //ogni tag nell'array di querystring
                     p.tags.some(t =>                        //(se c'è almeno una corrispondenza)
                     t.toLowerCase().includes(onetag))));    //è incluso(uguaglianza parziale) in una delle stringhe(tutto minuscolo) dell'array della proprità tags
 
-    res.json(results);
+    res.json(results); */
         
     }
 }
