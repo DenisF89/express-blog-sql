@@ -23,10 +23,10 @@ const index = (req,res)=>{
 
     
     //SOLUZIONE CON EXISTS per verificare per ogni tag: (TRUE) se esiste almeno una corrispondenza della substring(search) nei tag associati al post
-    // per ogni tag creo una EXISTS
-    const conditions = alltags.map(() => 
-                    `EXISTS (                           -- restituisci vero
-                     SELECT 1                            -- convenzione exists non seleziona nulla
+    
+    const conditions = alltags.map(() =>                 // per ogni tag creo una EXISTS
+                    `EXISTS (                            -- restituisci TRUE o FALSE
+                     SELECT 1                            -- convenzione: exists non seleziona nulla
                      FROM post_tag PT                    -- considero i risultati della tabella ponte
                      JOIN tags T ON T.id = PT.tag_id     -- join su tabella tags
                      WHERE PT.post_id = P.id             -- condizioni filtro: i risultati con id del post
