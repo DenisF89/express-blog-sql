@@ -1,5 +1,5 @@
 const posts = require('../data/post_data.js');	
-const connection = require('../data/db'); 
+const connection = require('../data/db.js'); 
 
 const index = (req,res)=>{
 
