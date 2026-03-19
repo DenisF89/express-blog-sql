@@ -19,29 +19,59 @@ const index = (req,res)=>{
                     : [tag]) 
     .map(t => t.toLowerCase().trim());      //normalizzo querystring
 
-    const search = `%${alltags[0].toLowerCase()}%`; //cerca con un tag (il primo) e "substring" %search% (tipo include)
+    const search = alltags.map(t=>`%${t}%`); //cerca tag "substring" %search% (tipo include)
 
-    const sql = `SELECT DISTINCT P.id, P.title, P.content, P.image
-                FROM posts P
-                JOIN post_tag PT
-                ON P.id = PT.post_id
-                JOIN tags T
-                ON T.id = PT.tag_id
-                WHERE T.label LIKE ?`;          //seleziono solo i post che hanno il tag selezionato (Join su tabella ponte)
+    
+    //SOLUZIONE CON EXISTS per verificare per ogni tag: (TRUE) se esiste almeno una corrispondenza della substring(search) nei tag associati al post
+    // per ogni tag creo una EXISTS
+    const conditions = alltags.map(() => 
+                    `EXISTS (                           -- restituisci vero
+                     SELECT 1                            -- convenzione exists non seleziona nulla
+                     FROM post_tag PT                    -- considero i risultati della tabella ponte
+                     JOIN tags T ON T.id = PT.tag_id     -- join su tabella tags
+                     WHERE PT.post_id = P.id             -- condizioni filtro: i risultati con id del post
+                     AND LOWER(T.label) LIKE ?           -- e che contengano la stringa del search
+                     )`).join(' AND ');                  // mette insieme gli elementi array in una stringa unita da AND
 
-    connection.query(sql, [search], (err, results) => {   // esecuzione query
+    const sql = `SELECT P.id, P.title, P.content, P.image,
+
+                 -- per recuperare anche i tag associati 
+                 -- GROUP_CONCAT(T.label) AS tags        -- restituisce i valori in una stringa unica
+                 JSON_ARRAYAGG(T.label) AS tags          -- restituisce i valori in un array
+                 
+                 FROM posts P 
+                 JOIN post_tag PT ON P.id = PT.post_id   -- faccio join per recuperare anche i tag
+                 JOIN tags T ON T.id = PT.tag_id
+
+                 WHERE ${conditions}
+                 GROUP BY P.id`;                         //raggruppo per id post per non avere doppione post per ogni tag
+
+    connection.query(sql, search, (err, results) => {
+        if (err) return res.status(500).json({error: 'Database query failed', err});
+        return res.json(results);
+    });
+
+    /*SOLUZIONE CON BUG LIKE% + HAVING COUNT
+    //Seleziono tutti i post con almeno uno dei tag che ho ricevuto da querystring
+    const conditions =  alltags.map(            //per ogni tag nell'array
+                        () => `T.label LIKE ?`) //creo una stringa filtro LIKE %tag%
+                        .join(' OR ');          //e le unisco in una stringa unica con OR
+                                                //Es: T.label LIKE %dolci% OR T.label LIKE %tipast% (trova antipasti)
+
+    
+    const sql = `SELECT DISTINCT P.id, P.title, P.content, P.image  -- selezione le colonne (distinct elimina duplicati) 
+                FROM posts P                                -- da tabella post         
+                JOIN post_tag PT    ON P.id = PT.post_id    -- JOIN su tabella ponte       
+                JOIN tags T         ON T.id = PT.tag_id     -- JOIN sui tag
+                WHERE ${conditions}                         -- filtro: corrispondenza di almeno uno dei tag        
+                GROUP BY P.id                               -- raggruppo per post trovati                             
+                HAVING COUNT(DISTINCT T.id) = ?`;           // e filtro solo quelli che hanno n.tag = a quelli passati
+
+    connection.query(sql, [...search, alltags.length], (err, results) => {   // esecuzione query
             if (err) return res.status(500).json({ error: 'Database query failed', err }); 
             return res.json(results); 
         });
-
-
-  /*   const results = posts.filter(p =>                       //restituisci solo i post dove
-                    alltags.every(onetag =>                 //ogni tag nell'array di querystring
-                    p.tags.some(t =>                        //(se c'è almeno una corrispondenza)
-                    t.toLowerCase().includes(onetag))));    //è incluso(uguaglianza parziale) in una delle stringhe(tutto minuscolo) dell'array della proprità tags
-
-    res.json(results); */
-        
+        */ 
     }
 }
 
