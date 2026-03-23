@@ -1,4 +1,3 @@
-const posts = require('../data/post_data.js');	
 const connection = require('../data/db.js'); 
 
 const index = (req,res)=>{
@@ -8,9 +7,13 @@ const index = (req,res)=>{
 
     if (!tag) {                                     //se non ci sono tag selezionati
         const sql = `SELECT * FROM posts`;          // preparazione query
-        connection.query(sql, (err, results) => {   // esecuzione query
-            if (err) return res.status(500).json({ error: 'Database query failed' }); //se c'è un errore restituisce messaggio
-            return res.json(results); });           // restituisco i risultati della query (tutti i post) in formato json
+        connection.query(sql).then(results=>{
+            const rows = results[0];            //i risultati sono nella prima proprietà dell'oggetto results
+            return res.json(rows);              // restituisco i risultati della query (tutti i post) in formato json
+            }).catch(error=>{
+                return res.status(500).json({ error: 'Database query failed' }) //se c'è un errore restituisce messaggio); 
+                }); 
+                      
     }
     else{
     
@@ -46,12 +49,17 @@ const index = (req,res)=>{
                  WHERE ${conditions}
                  GROUP BY P.id`;                         //raggruppo per id post per non avere doppione post per ogni tag
 
-    connection.query(sql, search, (err, results) => {
-        if (err) return res.status(500).json({error: 'Database query failed', err});
-        return res.json(results);
+    connection.query(sql, search).then(results=>
+        {return res.json(results[0]);   
+        }).catch(error=>{return res.status(500).json({error: 'Database query failed', err});
     });
 
-    /*SOLUZIONE CON BUG LIKE% + HAVING COUNT
+    /*SOLUZIONE CON BUG LIKE% + HAVING COUNT (non funziona: 
+    l'intento è selezionare tutti i post che hanno almeno una corrispondenza di tag fra quelli passati, li raggruppo e conto quanti tag sono associtati ad ogni post.
+    Se avessi una corrispondenza esatta di tag, filtrando i post con numero di tag = il numero di valori passati, funzionerebbe,
+    ma usando LIKE %% un valore passato di cerca potrebbe corrispondere a piu tag. 
+    Es: (url?tag=primo => '%primo%' => 'primo di carne', 'primo di pesce' )
+    
     //Seleziono tutti i post con almeno uno dei tag che ho ricevuto da querystring
     const conditions =  alltags.map(            //per ogni tag nell'array
                         () => `T.label LIKE ?`) //creo una stringa filtro LIKE %tag%
@@ -287,8 +295,9 @@ const destroy = (req, res) => {
     const sql = `DELETE FROM posts 
                  WHERE id = ?`
 
-    connection.query(   sql,[id],(err) => { 
-                            if (err) return res.status(500).json({ error: 'Errore nella cancellazione post' }); 
+    connection.query(   sql,[id],(err,results) => { 
+                            if (err) return res.status(500).json({ error: 'Errore nella cancellazione post' });
+                            if  (results.affectedRows === 0) return res.status(404).json({error: 'Nessun post trovato e cancellato',results});
                             res.sendStatus(204)
                         });
 }
